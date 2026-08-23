@@ -1,0 +1,26 @@
+services:
+  postgres:
+    image: postgres:18
+    container_name: infrawatch-postgres
+
+    environment:
+      POSTGRES_DB: infrawatch
+      POSTGRES_USER: infrawatch
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+    ports:
+      - "127.0.0.1:5433:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U infrawatch -d infrawatch"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+
+volumes:
+  postgres_data:
