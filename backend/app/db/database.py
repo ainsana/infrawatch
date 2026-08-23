@@ -1,4 +1,7 @@
+from collections.abc import Generator
+
 from sqlalchemy import URL, create_engine, text
+from sqlalchemy.orm import Session, sessionmaker
 
 from backend.app.core.config import get_settings
 
@@ -20,6 +23,17 @@ engine = create_engine(
     build_database_url(),
     pool_pre_ping=True,
 )
+
+
+SessionLocal = sessionmaker(
+    bind=engine,
+    expire_on_commit=False,
+)
+
+
+def get_db_session() -> Generator[Session]:
+    with SessionLocal() as session:
+        yield session
 
 
 def check_database_connection() -> int:
