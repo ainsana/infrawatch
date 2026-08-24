@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from sqlalchemy.orm import Session
 
 from backend.app.models.host import Host
@@ -31,6 +33,9 @@ def run_tcp_check(
     )
 
     session.add(network_check)
+    if result.is_open:
+        host.status = "online"
+        host.last_seen_at = datetime.now(UTC)
     session.commit()
     session.refresh(network_check)
 

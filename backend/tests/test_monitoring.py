@@ -51,6 +51,9 @@ def test_run_tcp_check_persists_open_result(
     assert network_check.error is None
     assert network_check.checked_at is not None
 
+    assert host.status == "online"
+    assert host.last_seen_at is not None
+
     persisted_check = db_session.scalar(
         select(NetworkCheck).where(
             NetworkCheck.id == network_check.id,
@@ -105,3 +108,47 @@ def test_run_tcp_check_returns_none_for_missing_host(
 
     assert network_check is None
     mock_check.assert_not_called()
+
+
+def test_run_tcp_check_failure_does_not_mark_host_offline(
+    db_session: Session,
+) -> None:
+    host = create_test_host(db_session)
+
+    with patch(
+        "backend.app.services.monitoring.check_tcp_port",
+        return_value=TcpCheckResult(
+            is_open=True,
+            duration_ms=5.0,
+            error=None,
+        ),
+    ):
+        run_tcp_check(
+            session=db_session,
+            host_id=host.id,
+            port=443,
+        )
+
+    previous_last_seen_at = host.last_seen_at
+
+    assert host.status == "online"
+    assert previous_last_seen_at is not None
+
+    with patch(
+        "backend.app.services.monitoring.check_tcp_port",
+        return_value=TcpCheckResult(
+            is_open=False,
+            duration_ms=1000.0,
+            error="timed out",
+        ),
+    ):
+        network_check = run_tcp_check(
+            session=db_session,
+            host_id=host.id,
+            port=22,
+        )
+
+    assert network_check is not None
+    assert network_check.is_open is False
+    assert host.status == "online"
+    assert host.last_seen_at == previous_last_seen_at
