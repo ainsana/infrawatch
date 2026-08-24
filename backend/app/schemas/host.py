@@ -23,5 +23,6 @@ class HostRead(BaseModel):
     ip_address: str
     operating_system: str
     status: str
+    last_seen_at: datetime | None
     created_at: datetime
     updated_at: datetime
