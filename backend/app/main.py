@@ -1,10 +1,13 @@
 from fastapi import FastAPI
 
+from backend.app.api.routes.hosts import router as hosts_router
+
 app = FastAPI(
     title="InfraWatch API",
     version="0.0.1",
 )
 
+app.include_router(hosts_router)
 
 @app.get("/health")
 def health() -> dict[str, str]:

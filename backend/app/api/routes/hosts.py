@@ -1,0 +1,64 @@
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from backend.app.db.database import get_db_session
+from backend.app.models.host import Host
+from backend.app.schemas.host import HostCreate, HostRead
+
+router = APIRouter(
+    prefix="/hosts",
+    tags=["hosts"],
+)
+
+DbSession = Annotated[Session, Depends(get_db_session)]
+Offset = Annotated[int, Query(ge=0)]
+Limit = Annotated[int, Query(ge=1, le=100)]
+
+@router.post(
+    "",
+    response_model=HostRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_host(payload: HostCreate, session: DbSession) -> Host:
+    host = Host(
+        hostname=payload.hostname,
+        ip_address=payload.ip_address,
+        operating_system=payload.operating_system,
+    )
+
+    session.add(host)
+
+    try:
+        session.commit()
+    except IntegrityError as exc:
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A host with this hostname already exists.",
+        ) from exc
+
+    session.refresh(host)
+
+    return host
+
+@router.get(
+    "",
+    response_model=list[HostRead],
+)
+def list_hosts(
+    session: DbSession,
+    offset: Offset = 0,
+    limit: Limit = 100,
+) -> list[Host]:
+    statement = (
+        select(Host)
+        .order_by(Host.id)
+        .offset(offset)
+        .limit(limit)
+    )
+
+    return list(session.scalars(statement).all())
