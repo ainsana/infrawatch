@@ -1,4 +1,6 @@
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
@@ -289,3 +291,41 @@ def test_refresh_host_status_marks_stale_host_offline(
     assert data["id"] == host_id
     assert data["status"] == "offline"
     assert data["last_seen_at"] is not None
+
+
+def test_refresh_host_status_uses_configured_offline_threshold(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    create_response = client.post(
+        "/hosts",
+        json={
+            "hostname": "CONFIG-THRESHOLD-SERVER",
+            "ip_address": "10.40.0.20",
+            "operating_system": "Ubuntu 24.04",
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    host_id = create_response.json()["id"]
+    host = db_session.get(Host, host_id)
+
+    assert host is not None
+
+    host.status = "online"
+    host.last_seen_at = datetime.now(UTC) - timedelta(minutes=2)
+    db_session.commit()
+
+    with patch(
+        "backend.app.api.routes.hosts.get_settings",
+        return_value=SimpleNamespace(
+            host_offline_after_seconds=60,
+        ),
+    ):
+        response = client.post(
+            f"/hosts/{host_id}/refresh-status",
+        )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "offline"

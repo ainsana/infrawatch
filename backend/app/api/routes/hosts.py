@@ -1,3 +1,4 @@
+from datetime import timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -5,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from backend.app.core.config import get_settings
 from backend.app.db.database import get_db_session
 from backend.app.models.host import Host
 from backend.app.schemas.host import HostCreate, HostRead, HostUpdate
@@ -56,9 +58,14 @@ def refresh_host_health_status(
     host_id: int,
     session: DbSession,
 ) -> Host:
+    settings = get_settings()
+
     host = refresh_host_status(
         session=session,
         host_id=host_id,
+        offline_after=timedelta(
+            seconds=settings.host_offline_after_seconds,
+        ),
     )
 
     if host is None:
