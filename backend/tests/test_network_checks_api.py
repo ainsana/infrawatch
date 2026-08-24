@@ -248,3 +248,149 @@ def test_list_network_checks_returns_not_found(
     assert response.json() == {
         "detail": "Host not found.",
     }
+
+
+def test_list_network_checks_filters_by_port(
+    client: TestClient,
+) -> None:
+    host_id = create_host(client)
+
+    with patch(
+        "backend.app.services.monitoring.check_tcp_port",
+        return_value=TcpCheckResult(
+            is_open=True,
+            duration_ms=5.0,
+            error=None,
+        ),
+    ):
+        client.post(
+            f"/hosts/{host_id}/checks/tcp",
+            json={"port": 22},
+        )
+        client.post(
+            f"/hosts/{host_id}/checks/tcp",
+            json={"port": 443},
+        )
+        client.post(
+            f"/hosts/{host_id}/checks/tcp",
+            json={"port": 443},
+        )
+
+    response = client.get(f"/hosts/{host_id}/checks?port=443")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert len(data) == 2
+    assert all(item["port"] == 443 for item in data)
+
+
+def test_list_network_checks_filters_by_open_status(
+    client: TestClient,
+) -> None:
+    host_id = create_host(client)
+
+    with patch(
+        "backend.app.services.monitoring.check_tcp_port",
+        side_effect=[
+            TcpCheckResult(
+                is_open=True,
+                duration_ms=5.0,
+                error=None,
+            ),
+            TcpCheckResult(
+                is_open=False,
+                duration_ms=1000.0,
+                error="timed out",
+            ),
+            TcpCheckResult(
+                is_open=False,
+                duration_ms=1000.0,
+                error="timed out",
+            ),
+        ],
+    ):
+        client.post(
+            f"/hosts/{host_id}/checks/tcp",
+            json={"port": 22},
+        )
+        client.post(
+            f"/hosts/{host_id}/checks/tcp",
+            json={"port": 80},
+        )
+        client.post(
+            f"/hosts/{host_id}/checks/tcp",
+            json={"port": 443},
+        )
+
+    response = client.get(f"/hosts/{host_id}/checks?is_open=false")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert len(data) == 2
+    assert all(item["is_open"] is False for item in data)
+
+
+def test_list_network_checks_combines_filters(
+    client: TestClient,
+) -> None:
+    host_id = create_host(client)
+
+    with patch(
+        "backend.app.services.monitoring.check_tcp_port",
+        side_effect=[
+            TcpCheckResult(
+                is_open=True,
+                duration_ms=5.0,
+                error=None,
+            ),
+            TcpCheckResult(
+                is_open=False,
+                duration_ms=1000.0,
+                error="timed out",
+            ),
+            TcpCheckResult(
+                is_open=False,
+                duration_ms=1000.0,
+                error="timed out",
+            ),
+        ],
+    ):
+        client.post(
+            f"/hosts/{host_id}/checks/tcp",
+            json={"port": 22},
+        )
+        client.post(
+            f"/hosts/{host_id}/checks/tcp",
+            json={"port": 22},
+        )
+        client.post(
+            f"/hosts/{host_id}/checks/tcp",
+            json={"port": 443},
+        )
+
+    response = client.get(f"/hosts/{host_id}/checks?port=22&is_open=false")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert len(data) == 1
+    assert data[0]["port"] == 22
+    assert data[0]["is_open"] is False
+
+
+def test_list_network_checks_rejects_invalid_port_filter(
+    client: TestClient,
+) -> None:
+    response = client.get("/hosts/1/checks?port=70000")
+
+    assert response.status_code == 422
+
+    detail = response.json()["detail"]
+
+    assert detail[0]["loc"] == ["query", "port"]
+    assert detail[0]["type"] == "less_than_equal"

@@ -18,6 +18,8 @@ router = APIRouter(
 DbSession = Annotated[Session, Depends(get_db_session)]
 Offset = Annotated[int, Query(ge=0)]
 Limit = Annotated[int, Query(ge=1, le=100)]
+PortFilter = Annotated[int | None, Query(ge=1, le=65535)]
+OpenFilter = Annotated[bool | None, Query()]
 
 
 @router.get(
@@ -29,6 +31,8 @@ def list_network_checks(
     session: DbSession,
     offset: Offset = 0,
     limit: Limit = 100,
+    port: PortFilter = None,
+    is_open: OpenFilter = None,
 ) -> list[NetworkCheck]:
     host = session.get(Host, host_id)
 
@@ -38,10 +42,16 @@ def list_network_checks(
             detail="Host not found.",
         )
 
+    statement = select(NetworkCheck).where(NetworkCheck.host_id == host_id)
+
+    if port is not None:
+        statement = statement.where(NetworkCheck.port == port)
+
+    if is_open is not None:
+        statement = statement.where(NetworkCheck.is_open == is_open)
+
     statement = (
-        select(NetworkCheck)
-        .where(NetworkCheck.host_id == host_id)
-        .order_by(
+        statement.order_by(
             NetworkCheck.checked_at.desc(),
             NetworkCheck.id.desc(),
         )
