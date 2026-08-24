@@ -111,3 +111,20 @@ def update_host(
     session.refresh(host)
 
     return host
+
+
+@router.delete(
+    "/{host_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_host(host_id: int, session: DbSession) -> None:
+    host = session.get(Host, host_id)
+
+    if host is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Host not found.",
+        )
+
+    session.delete(host)
+    session.commit()

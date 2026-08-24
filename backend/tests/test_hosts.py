@@ -207,3 +207,31 @@ def test_update_host_duplicate_hostname_returns_conflict(
     assert response.json() == {
         "detail": "A host with this hostname already exists.",
     }
+
+
+def test_delete_host(client: TestClient) -> None:
+    create_response = create_test_host(
+        client,
+        hostname="DELETE-SERVER",
+        ip_address="10.0.7.10",
+    )
+
+    host_id = create_response.json()["id"]
+
+    delete_response = client.delete(f"/hosts/{host_id}")
+
+    assert delete_response.status_code == 204
+    assert delete_response.content == b""
+
+    get_response = client.get(f"/hosts/{host_id}")
+
+    assert get_response.status_code == 404
+
+
+def test_delete_host_returns_not_found(client: TestClient) -> None:
+    response = client.delete("/hosts/999999")
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Host not found.",
+    }
