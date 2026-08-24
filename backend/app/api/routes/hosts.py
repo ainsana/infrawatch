@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from backend.app.db.database import get_db_session
 from backend.app.models.host import Host
 from backend.app.schemas.host import HostCreate, HostRead, HostUpdate
+from backend.app.services.host_health import refresh_host_status
 
 router = APIRouter(
     prefix="/hosts",
@@ -43,6 +44,28 @@ def create_host(payload: HostCreate, session: DbSession) -> Host:
         ) from exc
 
     session.refresh(host)
+
+    return host
+
+
+@router.post(
+    "/{host_id}/refresh-status",
+    response_model=HostRead,
+)
+def refresh_host_health_status(
+    host_id: int,
+    session: DbSession,
+) -> Host:
+    host = refresh_host_status(
+        session=session,
+        host_id=host_id,
+    )
+
+    if host is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Host not found.",
+        )
 
     return host
 

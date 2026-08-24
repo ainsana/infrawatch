@@ -1,4 +1,9 @@
+from datetime import UTC, datetime, timedelta
+
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
+
+from backend.app.models.host import Host
 
 
 def create_test_host(
@@ -235,3 +240,52 @@ def test_delete_host_returns_not_found(client: TestClient) -> None:
     assert response.json() == {
         "detail": "Host not found.",
     }
+
+
+def test_refresh_host_status_returns_not_found(
+    client: TestClient,
+) -> None:
+    response = client.post("/hosts/999999/refresh-status")
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Host not found.",
+    }
+
+
+def test_refresh_host_status_marks_stale_host_offline(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    create_response = client.post(
+        "/hosts",
+        json={
+            "hostname": "STALE-SERVER",
+            "ip_address": "10.40.0.10",
+            "operating_system": "Ubuntu 24.04",
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    host_id = create_response.json()["id"]
+
+    host = db_session.get(Host, host_id)
+
+    assert host is not None
+
+    host.status = "online"
+    host.last_seen_at = datetime.now(UTC) - timedelta(minutes=10)
+    db_session.commit()
+
+    response = client.post(
+        f"/hosts/{host_id}/refresh-status",
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["id"] == host_id
+    assert data["status"] == "offline"
+    assert data["last_seen_at"] is not None
