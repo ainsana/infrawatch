@@ -133,3 +133,118 @@ def test_create_tcp_check_rejects_invalid_timeout(
     assert detail[0]["type"] == "greater_than"
 
     mock_run.assert_not_called()
+
+
+def test_list_network_checks(
+    client: TestClient,
+) -> None:
+    host_id = create_host(client)
+
+    with patch(
+        "backend.app.services.monitoring.check_tcp_port",
+        side_effect=[
+            TcpCheckResult(
+                is_open=True,
+                duration_ms=5.0,
+                error=None,
+            ),
+            TcpCheckResult(
+                is_open=False,
+                duration_ms=1000.0,
+                error="timed out",
+            ),
+            TcpCheckResult(
+                is_open=True,
+                duration_ms=7.0,
+                error=None,
+            ),
+        ],
+    ):
+        first_response = client.post(
+            f"/hosts/{host_id}/checks/tcp",
+            json={"port": 22},
+        )
+        second_response = client.post(
+            f"/hosts/{host_id}/checks/tcp",
+            json={"port": 80},
+        )
+        third_response = client.post(
+            f"/hosts/{host_id}/checks/tcp",
+            json={"port": 443},
+        )
+
+    response = client.get(f"/hosts/{host_id}/checks")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert [item["id"] for item in data] == [
+        third_response.json()["id"],
+        second_response.json()["id"],
+        first_response.json()["id"],
+    ]
+
+    assert [item["port"] for item in data] == [
+        443,
+        80,
+        22,
+    ]
+
+
+def test_list_network_checks_pagination(
+    client: TestClient,
+) -> None:
+    host_id = create_host(client)
+
+    with patch(
+        "backend.app.services.monitoring.check_tcp_port",
+        return_value=TcpCheckResult(
+            is_open=True,
+            duration_ms=5.0,
+            error=None,
+        ),
+    ):
+        client.post(
+            f"/hosts/{host_id}/checks/tcp",
+            json={"port": 22},
+        )
+        client.post(
+            f"/hosts/{host_id}/checks/tcp",
+            json={"port": 80},
+        )
+        client.post(
+            f"/hosts/{host_id}/checks/tcp",
+            json={"port": 443},
+        )
+
+    response = client.get(f"/hosts/{host_id}/checks?limit=1&offset=1")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert len(data) == 1
+    assert data[0]["port"] == 80
+
+
+def test_list_network_checks_returns_empty_list(
+    client: TestClient,
+) -> None:
+    host_id = create_host(client)
+
+    response = client.get(f"/hosts/{host_id}/checks")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_list_network_checks_returns_not_found(
+    client: TestClient,
+) -> None:
+    response = client.get("/hosts/999999/checks")
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Host not found.",
+    }
