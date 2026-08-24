@@ -18,6 +18,7 @@ DbSession = Annotated[Session, Depends(get_db_session)]
 Offset = Annotated[int, Query(ge=0)]
 Limit = Annotated[int, Query(ge=1, le=100)]
 
+
 @router.post(
     "",
     response_model=HostRead,
@@ -45,6 +46,7 @@ def create_host(payload: HostCreate, session: DbSession) -> Host:
 
     return host
 
+
 @router.get(
     "",
     response_model=list[HostRead],
@@ -54,11 +56,22 @@ def list_hosts(
     offset: Offset = 0,
     limit: Limit = 100,
 ) -> list[Host]:
-    statement = (
-        select(Host)
-        .order_by(Host.id)
-        .offset(offset)
-        .limit(limit)
-    )
+    statement = select(Host).order_by(Host.id).offset(offset).limit(limit)
 
     return list(session.scalars(statement).all())
+
+
+@router.get(
+    "/{host_id}",
+    response_model=HostRead,
+)
+def get_host(host_id: int, session: DbSession) -> Host:
+    host = session.get(Host, host_id)
+
+    if host is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Host not found.",
+        )
+
+    return host

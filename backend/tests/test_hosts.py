@@ -107,3 +107,34 @@ def test_each_test_starts_with_empty_database(client: TestClient) -> None:
 
     assert response.status_code == 200
     assert response.json() == []
+
+
+def test_get_host_by_id(client: TestClient) -> None:
+    create_response = create_test_host(
+        client,
+        hostname="DETAIL-SERVER",
+        ip_address="10.0.3.10",
+    )
+
+    host_id = create_response.json()["id"]
+
+    response = client.get(f"/hosts/{host_id}")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["id"] == host_id
+    assert data["hostname"] == "DETAIL-SERVER"
+    assert data["ip_address"] == "10.0.3.10"
+    assert data["operating_system"] == "Ubuntu 24.04"
+    assert data["status"] == "unknown"
+
+
+def test_get_host_returns_not_found(client: TestClient) -> None:
+    response = client.get("/hosts/999999")
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Host not found.",
+    }
