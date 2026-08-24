@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from backend.app.models.host import Host
 from backend.app.services.host_health import (
     evaluate_host_status,
+    refresh_all_host_statuses,
     refresh_host_status,
 )
 
@@ -163,3 +164,62 @@ def test_refresh_host_status_keeps_matching_status(
 
     assert refreshed_host is not None
     assert refreshed_host.status == "online"
+
+
+def test_refresh_all_host_statuses_updates_multiple_hosts(
+    db_session: Session,
+) -> None:
+    now = datetime(2026, 8, 24, 19, 0, tzinfo=UTC)
+
+    recent_host = Host(
+        hostname="RECENT-SERVER",
+        ip_address="10.50.0.10",
+        operating_system="Ubuntu 24.04",
+        status="unknown",
+        last_seen_at=now - timedelta(minutes=2),
+    )
+
+    stale_host = Host(
+        hostname="STALE-SERVER",
+        ip_address="10.50.0.20",
+        operating_system="Windows Server 2022",
+        status="online",
+        last_seen_at=now - timedelta(minutes=10),
+    )
+
+    unchanged_host = Host(
+        hostname="UNKNOWN-SERVER",
+        ip_address="10.50.0.30",
+        operating_system="Debian 13",
+        status="unknown",
+        last_seen_at=None,
+    )
+
+    db_session.add_all(
+        [
+            recent_host,
+            stale_host,
+            unchanged_host,
+        ]
+    )
+    db_session.commit()
+
+    changed_count = refresh_all_host_statuses(
+        session=db_session,
+        now=now,
+    )
+
+    assert changed_count == 2
+    assert recent_host.status == "online"
+    assert stale_host.status == "offline"
+    assert unchanged_host.status == "unknown"
+
+
+def test_refresh_all_host_statuses_returns_zero_when_no_hosts(
+    db_session: Session,
+) -> None:
+    changed_count = refresh_all_host_statuses(
+        session=db_session,
+    )
+
+    assert changed_count == 0

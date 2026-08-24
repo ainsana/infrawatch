@@ -1,5 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.app.models.host import Host
@@ -57,3 +58,36 @@ def refresh_host_status(
         session.refresh(host)
 
     return host
+
+
+def refresh_all_host_statuses(
+    session: Session,
+    *,
+    now: datetime | None = None,
+    offline_after: timedelta = timedelta(minutes=5),
+) -> int:
+    current_time = now or datetime.now(UTC)
+
+    hosts = list(
+        session.scalars(
+            select(Host).order_by(Host.id),
+        ).all()
+    )
+
+    changed_count = 0
+
+    for host in hosts:
+        new_status = evaluate_host_status(
+            last_seen_at=host.last_seen_at,
+            now=current_time,
+            offline_after=offline_after,
+        )
+
+        if host.status != new_status:
+            host.status = new_status
+            changed_count += 1
+
+    if changed_count > 0:
+        session.commit()
+
+    return changed_count
