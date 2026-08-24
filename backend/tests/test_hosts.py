@@ -329,3 +329,69 @@ def test_refresh_host_status_uses_configured_offline_threshold(
 
     assert response.status_code == 200
     assert response.json()["status"] == "offline"
+
+
+def test_refresh_all_host_statuses_returns_zero_when_no_hosts(
+    client: TestClient,
+) -> None:
+    response = client.post("/hosts/refresh-statuses")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "changed_count": 0,
+    }
+
+
+def test_refresh_all_host_statuses_updates_multiple_hosts(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    now = datetime.now(UTC)
+
+    recent_host = Host(
+        hostname="API-RECENT-SERVER",
+        ip_address="10.60.0.10",
+        operating_system="Ubuntu 24.04",
+        status="unknown",
+        last_seen_at=now - timedelta(minutes=2),
+    )
+
+    stale_host = Host(
+        hostname="API-STALE-SERVER",
+        ip_address="10.60.0.20",
+        operating_system="Windows Server 2022",
+        status="online",
+        last_seen_at=now - timedelta(minutes=10),
+    )
+
+    unchanged_host = Host(
+        hostname="API-UNKNOWN-SERVER",
+        ip_address="10.60.0.30",
+        operating_system="Debian 13",
+        status="unknown",
+        last_seen_at=None,
+    )
+
+    db_session.add_all(
+        [
+            recent_host,
+            stale_host,
+            unchanged_host,
+        ]
+    )
+    db_session.commit()
+
+    response = client.post("/hosts/refresh-statuses")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "changed_count": 2,
+    }
+
+    db_session.refresh(recent_host)
+    db_session.refresh(stale_host)
+    db_session.refresh(unchanged_host)
+
+    assert recent_host.status == "online"
+    assert stale_host.status == "offline"
+    assert unchanged_host.status == "unknown"

@@ -26,3 +26,7 @@ class HostRead(BaseModel):
     last_seen_at: datetime | None
     created_at: datetime
     updated_at: datetime
+
+
+class HostStatusRefreshSummary(BaseModel):
+    changed_count: int

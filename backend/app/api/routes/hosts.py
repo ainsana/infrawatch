@@ -9,8 +9,16 @@ from sqlalchemy.orm import Session
 from backend.app.core.config import get_settings
 from backend.app.db.database import get_db_session
 from backend.app.models.host import Host
-from backend.app.schemas.host import HostCreate, HostRead, HostUpdate
-from backend.app.services.host_health import refresh_host_status
+from backend.app.schemas.host import (
+    HostCreate,
+    HostRead,
+    HostStatusRefreshSummary,
+    HostUpdate,
+)
+from backend.app.services.host_health import (
+    refresh_all_host_statuses,
+    refresh_host_status,
+)
 
 router = APIRouter(
     prefix="/hosts",
@@ -75,6 +83,27 @@ def refresh_host_health_status(
         )
 
     return host
+
+
+@router.post(
+    "/refresh-statuses",
+    response_model=HostStatusRefreshSummary,
+)
+def refresh_all_hosts_health_status(
+    session: DbSession,
+) -> HostStatusRefreshSummary:
+    settings = get_settings()
+
+    changed_count = refresh_all_host_statuses(
+        session=session,
+        offline_after=timedelta(
+            seconds=settings.host_offline_after_seconds,
+        ),
+    )
+
+    return HostStatusRefreshSummary(
+        changed_count=changed_count,
+    )
 
 
 @router.get(
