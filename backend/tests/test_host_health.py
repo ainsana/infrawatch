@@ -140,3 +140,26 @@ def test_refresh_host_status_returns_none_for_missing_host(
     )
 
     assert refreshed_host is None
+
+
+def test_refresh_host_status_keeps_matching_status(
+    db_session: Session,
+) -> None:
+    now = datetime(2026, 8, 24, 19, 0, tzinfo=UTC)
+
+    host = create_health_test_host(
+        db_session,
+        last_seen_at=now - timedelta(minutes=2),
+    )
+
+    host.status = "online"
+    db_session.commit()
+
+    refreshed_host = refresh_host_status(
+        session=db_session,
+        host_id=host.id,
+        now=now,
+    )
+
+    assert refreshed_host is not None
+    assert refreshed_host.status == "online"
