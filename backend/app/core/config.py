@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import SecretStr
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     postgres_password: SecretStr
     postgres_host: str = "127.0.0.1"
     postgres_port: int = 5433
+    host_offline_after_seconds: int = Field(
+        default=300,
+        gt=0,
+    )
 
 
 @lru_cache
