@@ -394,3 +394,41 @@ def test_list_network_checks_rejects_invalid_port_filter(
 
     assert detail[0]["loc"] == ["query", "port"]
     assert detail[0]["type"] == "less_than_equal"
+
+
+def test_successful_tcp_check_updates_host_api_state(
+    client: TestClient,
+) -> None:
+    host_id = create_host(client)
+
+    before_response = client.get(f"/hosts/{host_id}")
+
+    assert before_response.status_code == 200
+    assert before_response.json()["status"] == "unknown"
+    assert before_response.json()["last_seen_at"] is None
+
+    with patch(
+        "backend.app.services.monitoring.check_tcp_port",
+        return_value=TcpCheckResult(
+            is_open=True,
+            duration_ms=4.5,
+            error=None,
+        ),
+    ):
+        check_response = client.post(
+            f"/hosts/{host_id}/checks/tcp",
+            json={
+                "port": 443,
+            },
+        )
+
+    assert check_response.status_code == 201
+
+    after_response = client.get(f"/hosts/{host_id}")
+
+    assert after_response.status_code == 200
+
+    data = after_response.json()
+
+    assert data["status"] == "online"
+    assert data["last_seen_at"] is not None
