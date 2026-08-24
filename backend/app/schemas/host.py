@@ -9,6 +9,12 @@ class HostCreate(BaseModel):
     operating_system: str
 
 
+class HostUpdate(BaseModel):
+    hostname: str | None = None
+    ip_address: str | None = None
+    operating_system: str | None = None
+
+
 class HostRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

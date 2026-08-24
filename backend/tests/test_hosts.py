@@ -138,3 +138,72 @@ def test_get_host_returns_not_found(client: TestClient) -> None:
     assert response.json() == {
         "detail": "Host not found.",
     }
+
+
+def test_update_host_partial(client: TestClient) -> None:
+    create_response = create_test_host(
+        client,
+        hostname="UPDATE-SERVER",
+        ip_address="10.0.4.10",
+    )
+
+    host_id = create_response.json()["id"]
+
+    response = client.patch(
+        f"/hosts/{host_id}",
+        json={
+            "ip_address": "10.0.4.20",
+        },
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["id"] == host_id
+    assert data["hostname"] == "UPDATE-SERVER"
+    assert data["ip_address"] == "10.0.4.20"
+    assert data["operating_system"] == "Ubuntu 24.04"
+
+
+def test_update_host_returns_not_found(client: TestClient) -> None:
+    response = client.patch(
+        "/hosts/999999",
+        json={
+            "ip_address": "10.0.5.20",
+        },
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Host not found.",
+    }
+
+
+def test_update_host_duplicate_hostname_returns_conflict(
+    client: TestClient,
+) -> None:
+    first_response = create_test_host(
+        client,
+        hostname="SERVER-FIRST",
+        ip_address="10.0.6.10",
+    )
+    second_response = create_test_host(
+        client,
+        hostname="SERVER-SECOND",
+        ip_address="10.0.6.20",
+    )
+
+    second_host_id = second_response.json()["id"]
+
+    response = client.patch(
+        f"/hosts/{second_host_id}",
+        json={
+            "hostname": first_response.json()["hostname"],
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": "A host with this hostname already exists.",
+    }

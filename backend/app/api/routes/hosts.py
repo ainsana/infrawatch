@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.db.database import get_db_session
 from backend.app.models.host import Host
-from backend.app.schemas.host import HostCreate, HostRead
+from backend.app.schemas.host import HostCreate, HostRead, HostUpdate
 
 router = APIRouter(
     prefix="/hosts",
@@ -73,5 +73,41 @@ def get_host(host_id: int, session: DbSession) -> Host:
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Host not found.",
         )
+
+    return host
+
+
+@router.patch(
+    "/{host_id}",
+    response_model=HostRead,
+)
+def update_host(
+    host_id: int,
+    payload: HostUpdate,
+    session: DbSession,
+) -> Host:
+    host = session.get(Host, host_id)
+
+    if host is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Host not found.",
+        )
+
+    update_data = payload.model_dump(exclude_unset=True)
+
+    for field, value in update_data.items():
+        setattr(host, field, value)
+
+    try:
+        session.commit()
+    except IntegrityError as exc:
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A host with this hostname already exists.",
+        ) from exc
+
+    session.refresh(host)
 
     return host
