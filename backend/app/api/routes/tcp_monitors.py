@@ -1,6 +1,7 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -15,6 +16,34 @@ router = APIRouter(
 )
 
 DbSession = Annotated[Session, Depends(get_db_session)]
+
+
+@router.get(
+    "",
+    response_model=list[TcpMonitorRead],
+)
+def list_tcp_monitors(
+    host_id: int,
+    session: DbSession,
+) -> list[TcpMonitor]:
+    host = session.get(Host, host_id)
+
+    if host is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Host not found.",
+        )
+
+    statement = (
+        select(TcpMonitor)
+        .where(TcpMonitor.host_id == host_id)
+        .order_by(
+            TcpMonitor.port,
+            TcpMonitor.id,
+        )
+    )
+
+    return list(session.scalars(statement).all())
 
 
 @router.post(

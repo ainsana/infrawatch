@@ -115,3 +115,66 @@ def test_create_tcp_monitor_rejects_invalid_timeout(
     )
 
     assert response.status_code == 422
+
+
+def test_list_tcp_monitors(
+    client: TestClient,
+) -> None:
+    host_id = create_test_host(client)
+
+    first_response = client.post(
+        f"/hosts/{host_id}/monitors/tcp",
+        json={
+            "port": 443,
+        },
+    )
+    second_response = client.post(
+        f"/hosts/{host_id}/monitors/tcp",
+        json={
+            "port": 22,
+            "enabled": False,
+        },
+    )
+
+    assert first_response.status_code == 201
+    assert second_response.status_code == 201
+
+    response = client.get(
+        f"/hosts/{host_id}/monitors/tcp",
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert len(data) == 2
+    assert data[0]["port"] == 22
+    assert data[0]["enabled"] is False
+    assert data[1]["port"] == 443
+    assert data[1]["enabled"] is True
+
+
+def test_list_tcp_monitors_returns_empty_list(
+    client: TestClient,
+) -> None:
+    host_id = create_test_host(client)
+
+    response = client.get(
+        f"/hosts/{host_id}/monitors/tcp",
+    )
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_list_tcp_monitors_returns_not_found_for_missing_host(
+    client: TestClient,
+) -> None:
+    response = client.get(
+        "/hosts/999999/monitors/tcp",
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Host not found.",
+    }
