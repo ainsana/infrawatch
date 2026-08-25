@@ -2,6 +2,7 @@ from fastapi import FastAPI
 
 from backend.app.api.routes.hosts import router as hosts_router
 from backend.app.api.routes.network_checks import router as network_checks_router
+from backend.app.api.routes.tcp_monitors import router as tcp_monitors_router
 
 app = FastAPI(
     title="InfraWatch API",
@@ -10,6 +11,7 @@ app = FastAPI(
 
 app.include_router(hosts_router)
 app.include_router(network_checks_router)
+app.include_router(tcp_monitors_router)
 
 
 @app.get("/health")
