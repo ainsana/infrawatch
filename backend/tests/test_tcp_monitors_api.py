@@ -178,3 +178,103 @@ def test_list_tcp_monitors_returns_not_found_for_missing_host(
     assert response.json() == {
         "detail": "Host not found.",
     }
+
+
+def test_get_tcp_monitor(
+    client: TestClient,
+) -> None:
+    host_id = create_test_host(client)
+
+    create_response = client.post(
+        f"/hosts/{host_id}/monitors/tcp",
+        json={
+            "port": 443,
+            "timeout_seconds": 2.0,
+            "enabled": True,
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    monitor_id = create_response.json()["id"]
+
+    response = client.get(
+        f"/hosts/{host_id}/monitors/tcp/{monitor_id}",
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["id"] == monitor_id
+    assert data["host_id"] == host_id
+    assert data["port"] == 443
+    assert data["timeout_seconds"] == 2.0
+    assert data["enabled"] is True
+
+
+def test_get_tcp_monitor_returns_not_found_for_missing_host(
+    client: TestClient,
+) -> None:
+    response = client.get(
+        "/hosts/999999/monitors/tcp/1",
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Host not found.",
+    }
+
+
+def test_get_tcp_monitor_returns_not_found_for_monitor_from_another_host(
+    client: TestClient,
+) -> None:
+    first_host_id = create_test_host(client)
+
+    monitor_response = client.post(
+        f"/hosts/{first_host_id}/monitors/tcp",
+        json={
+            "port": 443,
+        },
+    )
+
+    assert monitor_response.status_code == 201
+
+    monitor_id = monitor_response.json()["id"]
+
+    second_host_response = client.post(
+        "/hosts",
+        json={
+            "hostname": "SECOND-TCP-MONITOR-SERVER",
+            "ip_address": "10.80.0.20",
+            "operating_system": "Debian 13",
+        },
+    )
+
+    assert second_host_response.status_code == 201
+
+    second_host_id = second_host_response.json()["id"]
+
+    response = client.get(
+        f"/hosts/{second_host_id}/monitors/tcp/{monitor_id}",
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "TCP monitor not found.",
+    }
+
+
+def test_get_tcp_monitor_returns_not_found_for_missing_monitor(
+    client: TestClient,
+) -> None:
+    host_id = create_test_host(client)
+
+    response = client.get(
+        f"/hosts/{host_id}/monitors/tcp/999999",
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "TCP monitor not found.",
+    }

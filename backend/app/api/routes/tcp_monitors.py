@@ -46,6 +46,39 @@ def list_tcp_monitors(
     return list(session.scalars(statement).all())
 
 
+@router.get(
+    "/{monitor_id}",
+    response_model=TcpMonitorRead,
+)
+def get_tcp_monitor(
+    host_id: int,
+    monitor_id: int,
+    session: DbSession,
+) -> TcpMonitor:
+    host = session.get(Host, host_id)
+
+    if host is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Host not found.",
+        )
+
+    statement = select(TcpMonitor).where(
+        TcpMonitor.id == monitor_id,
+        TcpMonitor.host_id == host_id,
+    )
+
+    monitor = session.scalar(statement)
+
+    if monitor is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="TCP monitor not found.",
+        )
+
+    return monitor
+
+
 @router.post(
     "",
     response_model=TcpMonitorRead,
