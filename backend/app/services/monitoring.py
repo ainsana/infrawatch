@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from backend.app.db.database import SessionLocal
 from backend.app.models.host import Host
 from backend.app.models.network_check import NetworkCheck
 from backend.app.models.tcp_monitor import TcpMonitor
@@ -78,3 +79,10 @@ def run_enabled_tcp_monitors(
             executed_count += 1
 
     return executed_count
+
+
+def run_monitoring_cycle() -> int:
+    with SessionLocal() as session:
+        return run_enabled_tcp_monitors(
+            session=session,
+        )

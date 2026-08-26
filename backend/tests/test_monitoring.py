@@ -8,6 +8,7 @@ from backend.app.models.network_check import NetworkCheck
 from backend.app.models.tcp_monitor import TcpMonitor
 from backend.app.services.monitoring import (
     run_enabled_tcp_monitors,
+    run_monitoring_cycle,
     run_tcp_check,
 )
 from backend.app.services.network import TcpCheckResult
@@ -357,3 +358,27 @@ def test_run_enabled_tcp_monitors_logs_monitor_error(
 
     assert executed_count == 0
     assert "TCP monitor execution failed" in caplog.text
+
+
+def test_run_monitoring_cycle_uses_own_database_session(
+    db_session: Session,
+) -> None:
+    with (
+        patch(
+            "backend.app.services.monitoring.SessionLocal",
+        ) as mock_session_local,
+        patch(
+            "backend.app.services.monitoring.run_enabled_tcp_monitors",
+            return_value=3,
+        ) as mock_run_enabled_tcp_monitors,
+    ):
+        mock_session_local.return_value.__enter__.return_value = db_session
+
+        executed_count = run_monitoring_cycle()
+
+    assert executed_count == 3
+
+    mock_session_local.assert_called_once_with()
+    mock_run_enabled_tcp_monitors.assert_called_once_with(
+        session=db_session,
+    )
