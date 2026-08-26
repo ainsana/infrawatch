@@ -5,7 +5,11 @@ from sqlalchemy.orm import Session
 
 from backend.app.models.host import Host
 from backend.app.models.network_check import NetworkCheck
-from backend.app.services.monitoring import run_tcp_check
+from backend.app.models.tcp_monitor import TcpMonitor
+from backend.app.services.monitoring import (
+    run_enabled_tcp_monitors,
+    run_tcp_check,
+)
 from backend.app.services.network import TcpCheckResult
 
 
@@ -152,3 +156,130 @@ def test_run_tcp_check_failure_does_not_mark_host_offline(
     assert network_check.is_open is False
     assert host.status == "online"
     assert host.last_seen_at == previous_last_seen_at
+
+
+def test_run_enabled_tcp_monitors_runs_only_enabled_monitors(
+    db_session: Session,
+) -> None:
+    host = create_test_host(db_session)
+
+    enabled_monitor = TcpMonitor(
+        host_id=host.id,
+        port=443,
+        timeout_seconds=2.0,
+        enabled=True,
+    )
+    disabled_monitor = TcpMonitor(
+        host_id=host.id,
+        port=22,
+        timeout_seconds=3.0,
+        enabled=False,
+    )
+
+    db_session.add_all(
+        [
+            enabled_monitor,
+            disabled_monitor,
+        ]
+    )
+    db_session.commit()
+
+    with patch(
+        "backend.app.services.monitoring.run_tcp_check",
+    ) as mock_run_tcp_check:
+        mock_run_tcp_check.return_value = NetworkCheck(
+            host_id=host.id,
+            port=443,
+            is_open=True,
+            duration_ms=5.0,
+            error=None,
+        )
+
+        executed_count = run_enabled_tcp_monitors(
+            session=db_session,
+        )
+
+    assert executed_count == 1
+
+    mock_run_tcp_check.assert_called_once_with(
+        session=db_session,
+        host_id=host.id,
+        port=443,
+        timeout=2.0,
+    )
+
+
+def test_run_enabled_tcp_monitors_returns_zero_when_no_enabled_monitors(
+    db_session: Session,
+) -> None:
+    host = create_test_host(db_session)
+
+    monitor = TcpMonitor(
+        host_id=host.id,
+        port=443,
+        enabled=False,
+    )
+
+    db_session.add(monitor)
+    db_session.commit()
+
+    with patch(
+        "backend.app.services.monitoring.run_tcp_check",
+    ) as mock_run_tcp_check:
+        executed_count = run_enabled_tcp_monitors(
+            session=db_session,
+        )
+
+    assert executed_count == 0
+    mock_run_tcp_check.assert_not_called()
+
+
+def test_run_enabled_tcp_monitors_persists_network_check(
+    db_session: Session,
+) -> None:
+    host = create_test_host(db_session)
+
+    monitor = TcpMonitor(
+        host_id=host.id,
+        port=443,
+        timeout_seconds=2.5,
+        enabled=True,
+    )
+
+    db_session.add(monitor)
+    db_session.commit()
+
+    with patch(
+        "backend.app.services.monitoring.check_tcp_port",
+        return_value=TcpCheckResult(
+            is_open=True,
+            duration_ms=7.5,
+            error=None,
+        ),
+    ) as mock_check:
+        executed_count = run_enabled_tcp_monitors(
+            session=db_session,
+        )
+
+    assert executed_count == 1
+
+    persisted_check = db_session.scalar(
+        select(NetworkCheck).where(
+            NetworkCheck.host_id == host.id,
+            NetworkCheck.port == 443,
+        )
+    )
+
+    assert persisted_check is not None
+    assert persisted_check.is_open is True
+    assert persisted_check.duration_ms == 7.5
+    assert persisted_check.error is None
+
+    assert host.status == "online"
+    assert host.last_seen_at is not None
+
+    mock_check.assert_called_once_with(
+        host="10.10.0.10",
+        port=443,
+        timeout=2.5,
+    )
