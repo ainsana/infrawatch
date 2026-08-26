@@ -8,7 +8,11 @@ from sqlalchemy.orm import Session
 from backend.app.db.database import get_db_session
 from backend.app.models.host import Host
 from backend.app.models.tcp_monitor import TcpMonitor
-from backend.app.schemas.tcp_monitor import TcpMonitorCreate, TcpMonitorRead
+from backend.app.schemas.tcp_monitor import (
+    TcpMonitorCreate,
+    TcpMonitorRead,
+    TcpMonitorUpdate,
+)
 
 router = APIRouter(
     prefix="/hosts/{host_id}/monitors/tcp",
@@ -75,6 +79,56 @@ def get_tcp_monitor(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="TCP monitor not found.",
         )
+
+    return monitor
+
+
+@router.patch(
+    "/{monitor_id}",
+    response_model=TcpMonitorRead,
+)
+def update_tcp_monitor(
+    host_id: int,
+    monitor_id: int,
+    payload: TcpMonitorUpdate,
+    session: DbSession,
+) -> TcpMonitor:
+    host = session.get(Host, host_id)
+
+    if host is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Host not found.",
+        )
+
+    statement = select(TcpMonitor).where(
+        TcpMonitor.id == monitor_id,
+        TcpMonitor.host_id == host_id,
+    )
+
+    monitor = session.scalar(statement)
+
+    if monitor is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="TCP monitor not found.",
+        )
+
+    update_data = payload.model_dump(exclude_unset=True)
+
+    for field, value in update_data.items():
+        setattr(monitor, field, value)
+
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="TCP monitor already exists for this host and port.",
+        ) from None
+
+    session.refresh(monitor)
 
     return monitor
 

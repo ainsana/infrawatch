@@ -278,3 +278,161 @@ def test_get_tcp_monitor_returns_not_found_for_missing_monitor(
     assert response.json() == {
         "detail": "TCP monitor not found.",
     }
+
+
+def test_update_tcp_monitor_partial(
+    client: TestClient,
+) -> None:
+    host_id = create_test_host(client)
+
+    create_response = client.post(
+        f"/hosts/{host_id}/monitors/tcp",
+        json={
+            "port": 443,
+            "timeout_seconds": 2.0,
+            "enabled": True,
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    monitor_id = create_response.json()["id"]
+
+    response = client.patch(
+        f"/hosts/{host_id}/monitors/tcp/{monitor_id}",
+        json={
+            "enabled": False,
+        },
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["id"] == monitor_id
+    assert data["host_id"] == host_id
+    assert data["port"] == 443
+    assert data["timeout_seconds"] == 2.0
+    assert data["enabled"] is False
+
+
+def test_update_tcp_monitor_returns_not_found_for_missing_monitor(
+    client: TestClient,
+) -> None:
+    host_id = create_test_host(client)
+
+    response = client.patch(
+        f"/hosts/{host_id}/monitors/tcp/999999",
+        json={
+            "enabled": False,
+        },
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "TCP monitor not found.",
+    }
+
+
+def test_update_tcp_monitor_returns_conflict_for_duplicate_port(
+    client: TestClient,
+) -> None:
+    host_id = create_test_host(client)
+
+    first_response = client.post(
+        f"/hosts/{host_id}/monitors/tcp",
+        json={
+            "port": 22,
+        },
+    )
+    second_response = client.post(
+        f"/hosts/{host_id}/monitors/tcp",
+        json={
+            "port": 443,
+        },
+    )
+
+    assert first_response.status_code == 201
+    assert second_response.status_code == 201
+
+    second_monitor_id = second_response.json()["id"]
+
+    response = client.patch(
+        f"/hosts/{host_id}/monitors/tcp/{second_monitor_id}",
+        json={
+            "port": 22,
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": "TCP monitor already exists for this host and port.",
+    }
+
+
+def test_update_tcp_monitor_returns_not_found_for_missing_host(
+    client: TestClient,
+) -> None:
+    response = client.patch(
+        "/hosts/999999/monitors/tcp/1",
+        json={
+            "enabled": False,
+        },
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Host not found.",
+    }
+
+
+def test_update_tcp_monitor_rejects_invalid_port(
+    client: TestClient,
+) -> None:
+    host_id = create_test_host(client)
+
+    create_response = client.post(
+        f"/hosts/{host_id}/monitors/tcp",
+        json={
+            "port": 443,
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    monitor_id = create_response.json()["id"]
+
+    response = client.patch(
+        f"/hosts/{host_id}/monitors/tcp/{monitor_id}",
+        json={
+            "port": 70000,
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_update_tcp_monitor_rejects_invalid_timeout(
+    client: TestClient,
+) -> None:
+    host_id = create_test_host(client)
+
+    create_response = client.post(
+        f"/hosts/{host_id}/monitors/tcp",
+        json={
+            "port": 443,
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    monitor_id = create_response.json()["id"]
+
+    response = client.patch(
+        f"/hosts/{host_id}/monitors/tcp/{monitor_id}",
+        json={
+            "timeout_seconds": 0,
+        },
+    )
+
+    assert response.status_code == 422
