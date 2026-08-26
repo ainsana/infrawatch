@@ -1,3 +1,4 @@
+import logging
 from datetime import UTC, datetime
 
 from sqlalchemy import select
@@ -7,6 +8,8 @@ from backend.app.models.host import Host
 from backend.app.models.network_check import NetworkCheck
 from backend.app.models.tcp_monitor import TcpMonitor
 from backend.app.services.network import check_tcp_port
+
+logger = logging.getLogger(__name__)
 
 
 def run_tcp_check(
@@ -54,12 +57,22 @@ def run_enabled_tcp_monitors(
     executed_count = 0
 
     for monitor in monitors:
-        network_check = run_tcp_check(
-            session=session,
-            host_id=monitor.host_id,
-            port=monitor.port,
-            timeout=monitor.timeout_seconds,
-        )
+        try:
+            network_check = run_tcp_check(
+                session=session,
+                host_id=monitor.host_id,
+                port=monitor.port,
+                timeout=monitor.timeout_seconds,
+            )
+        except Exception:
+            session.rollback()
+            logger.exception(
+                "TCP monitor execution failed: monitor_id=%s host_id=%s port=%s",
+                monitor.id,
+                monitor.host_id,
+                monitor.port,
+            )
+            continue
 
         if network_check is not None:
             executed_count += 1

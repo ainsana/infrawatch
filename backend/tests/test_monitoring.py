@@ -283,3 +283,77 @@ def test_run_enabled_tcp_monitors_persists_network_check(
         port=443,
         timeout=2.5,
     )
+
+
+def test_run_enabled_tcp_monitors_continues_after_monitor_error(
+    db_session: Session,
+) -> None:
+    host = create_test_host(db_session)
+
+    first_monitor = TcpMonitor(
+        host_id=host.id,
+        port=22,
+        enabled=True,
+    )
+    second_monitor = TcpMonitor(
+        host_id=host.id,
+        port=443,
+        enabled=True,
+    )
+
+    db_session.add_all(
+        [
+            first_monitor,
+            second_monitor,
+        ]
+    )
+    db_session.commit()
+
+    successful_check = NetworkCheck(
+        host_id=host.id,
+        port=443,
+        is_open=True,
+        duration_ms=5.0,
+        error=None,
+    )
+
+    with patch(
+        "backend.app.services.monitoring.run_tcp_check",
+        side_effect=[
+            RuntimeError("unexpected monitoring error"),
+            successful_check,
+        ],
+    ) as mock_run_tcp_check:
+        executed_count = run_enabled_tcp_monitors(
+            session=db_session,
+        )
+
+    assert executed_count == 1
+    assert mock_run_tcp_check.call_count == 2
+
+
+def test_run_enabled_tcp_monitors_logs_monitor_error(
+    db_session: Session,
+    caplog,
+) -> None:
+    host = create_test_host(db_session)
+
+    monitor = TcpMonitor(
+        host_id=host.id,
+        port=443,
+        enabled=True,
+    )
+
+    db_session.add(monitor)
+    db_session.commit()
+
+    with patch(
+        "backend.app.services.monitoring.run_tcp_check",
+        side_effect=RuntimeError("unexpected monitoring error"),
+    ):
+        executed_count = run_enabled_tcp_monitors(
+            session=db_session,
+        )
+
+    assert executed_count == 0
+    assert "TCP monitor execution failed" in caplog.text
