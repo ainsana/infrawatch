@@ -436,3 +436,108 @@ def test_update_tcp_monitor_rejects_invalid_timeout(
     )
 
     assert response.status_code == 422
+
+
+def test_delete_tcp_monitor(
+    client: TestClient,
+) -> None:
+    host_id = create_test_host(client)
+
+    create_response = client.post(
+        f"/hosts/{host_id}/monitors/tcp",
+        json={
+            "port": 443,
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    monitor_id = create_response.json()["id"]
+
+    response = client.delete(
+        f"/hosts/{host_id}/monitors/tcp/{monitor_id}",
+    )
+
+    assert response.status_code == 204
+
+    get_response = client.get(
+        f"/hosts/{host_id}/monitors/tcp/{monitor_id}",
+    )
+
+    assert get_response.status_code == 404
+    assert get_response.json() == {
+        "detail": "TCP monitor not found.",
+    }
+
+
+def test_delete_tcp_monitor_returns_not_found_for_missing_host(
+    client: TestClient,
+) -> None:
+    response = client.delete(
+        "/hosts/999999/monitors/tcp/1",
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Host not found.",
+    }
+
+
+def test_delete_tcp_monitor_returns_not_found_for_missing_monitor(
+    client: TestClient,
+) -> None:
+    host_id = create_test_host(client)
+
+    response = client.delete(
+        f"/hosts/{host_id}/monitors/tcp/999999",
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "TCP monitor not found.",
+    }
+
+
+def test_delete_tcp_monitor_returns_not_found_for_monitor_from_another_host(
+    client: TestClient,
+) -> None:
+    first_host_id = create_test_host(client)
+
+    monitor_response = client.post(
+        f"/hosts/{first_host_id}/monitors/tcp",
+        json={
+            "port": 443,
+        },
+    )
+
+    assert monitor_response.status_code == 201
+
+    monitor_id = monitor_response.json()["id"]
+
+    second_host_response = client.post(
+        "/hosts",
+        json={
+            "hostname": "SECOND-DELETE-TCP-MONITOR-SERVER",
+            "ip_address": "10.80.0.30",
+            "operating_system": "Ubuntu 24.04",
+        },
+    )
+
+    assert second_host_response.status_code == 201
+
+    second_host_id = second_host_response.json()["id"]
+
+    response = client.delete(
+        f"/hosts/{second_host_id}/monitors/tcp/{monitor_id}",
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "TCP monitor not found.",
+    }
+
+    original_monitor_response = client.get(
+        f"/hosts/{first_host_id}/monitors/tcp/{monitor_id}",
+    )
+
+    assert original_monitor_response.status_code == 200

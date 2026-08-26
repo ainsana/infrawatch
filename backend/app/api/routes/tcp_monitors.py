@@ -133,6 +133,40 @@ def update_tcp_monitor(
     return monitor
 
 
+@router.delete(
+    "/{monitor_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_tcp_monitor(
+    host_id: int,
+    monitor_id: int,
+    session: DbSession,
+) -> None:
+    host = session.get(Host, host_id)
+
+    if host is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Host not found.",
+        )
+
+    statement = select(TcpMonitor).where(
+        TcpMonitor.id == monitor_id,
+        TcpMonitor.host_id == host_id,
+    )
+
+    monitor = session.scalar(statement)
+
+    if monitor is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="TCP monitor not found.",
+        )
+
+    session.delete(monitor)
+    session.commit()
+
+
 @router.post(
     "",
     response_model=TcpMonitorRead,
