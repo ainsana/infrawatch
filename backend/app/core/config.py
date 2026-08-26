@@ -20,6 +20,7 @@ class Settings(BaseSettings):
         default=300,
         gt=0,
     )
+    monitoring_interval_seconds: int = Field(default=60, gt=0)
 
 
 @lru_cache
