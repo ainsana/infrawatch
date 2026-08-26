@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from threading import Event
 from unittest.mock import AsyncMock, call, patch
 
@@ -78,3 +79,41 @@ def test_app_lifespan_starts_and_stops_monitoring_scheduler() -> None:
         assert stopped.wait(timeout=2)
 
     assert received_intervals == [30]
+
+
+def test_monitoring_scheduler_continues_after_cycle_error(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    async def scenario() -> None:
+        with (
+            patch(
+                "backend.app.services.scheduler.asyncio.sleep",
+                new_callable=AsyncMock,
+                side_effect=[
+                    None,
+                    None,
+                    asyncio.CancelledError,
+                ],
+            ),
+            patch(
+                "backend.app.services.scheduler.asyncio.to_thread",
+                new_callable=AsyncMock,
+                side_effect=[
+                    RuntimeError("Database unavailable."),
+                    2,
+                ],
+            ) as mock_to_thread,
+            caplog.at_level(
+                logging.ERROR,
+                logger="backend.app.services.scheduler",
+            ),
+        ):
+            with pytest.raises(asyncio.CancelledError):
+                await run_monitoring_scheduler(
+                    interval_seconds=30,
+                )
+
+        assert mock_to_thread.await_count == 2
+        assert "Monitoring cycle failed." in caplog.text
+
+    asyncio.run(scenario())
