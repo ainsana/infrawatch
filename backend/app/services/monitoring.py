@@ -1,13 +1,15 @@
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from backend.app.core.config import get_settings
 from backend.app.db.database import SessionLocal
 from backend.app.models.host import Host
 from backend.app.models.network_check import NetworkCheck
 from backend.app.models.tcp_monitor import TcpMonitor
+from backend.app.services.host_health import refresh_all_host_statuses
 from backend.app.services.network import check_tcp_port
 
 logger = logging.getLogger(__name__)
@@ -82,7 +84,18 @@ def run_enabled_tcp_monitors(
 
 
 def run_monitoring_cycle() -> int:
+    settings = get_settings()
+
     with SessionLocal() as session:
-        return run_enabled_tcp_monitors(
+        executed_count = run_enabled_tcp_monitors(
             session=session,
         )
+
+        refresh_all_host_statuses(
+            session=session,
+            offline_after=timedelta(
+                seconds=settings.host_offline_after_seconds,
+            ),
+        )
+
+        return executed_count

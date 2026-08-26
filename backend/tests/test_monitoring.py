@@ -1,3 +1,5 @@
+from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from sqlalchemy import select
@@ -368,9 +370,18 @@ def test_run_monitoring_cycle_uses_own_database_session(
             "backend.app.services.monitoring.SessionLocal",
         ) as mock_session_local,
         patch(
+            "backend.app.services.monitoring.get_settings",
+            return_value=SimpleNamespace(
+                host_offline_after_seconds=300,
+            ),
+        ),
+        patch(
             "backend.app.services.monitoring.run_enabled_tcp_monitors",
             return_value=3,
         ) as mock_run_enabled_tcp_monitors,
+        patch(
+            "backend.app.services.monitoring.refresh_all_host_statuses",
+        ) as mock_refresh_all_host_statuses,
     ):
         mock_session_local.return_value.__enter__.return_value = db_session
 
@@ -379,6 +390,45 @@ def test_run_monitoring_cycle_uses_own_database_session(
     assert executed_count == 3
 
     mock_session_local.assert_called_once_with()
+
     mock_run_enabled_tcp_monitors.assert_called_once_with(
         session=db_session,
     )
+
+    mock_refresh_all_host_statuses.assert_called_once_with(
+        session=db_session,
+        offline_after=timedelta(seconds=300),
+    )
+
+
+def test_run_monitoring_cycle_refreshes_stale_host_status(
+    db_session: Session,
+) -> None:
+    host = create_test_host(db_session)
+
+    host.status = "online"
+    host.last_seen_at = datetime.now(UTC) - timedelta(minutes=10)
+
+    db_session.commit()
+
+    with (
+        patch(
+            "backend.app.services.monitoring.SessionLocal",
+        ) as mock_session_local,
+        patch(
+            "backend.app.services.monitoring.get_settings",
+            return_value=SimpleNamespace(
+                host_offline_after_seconds=300,
+            ),
+        ),
+        patch(
+            "backend.app.services.monitoring.run_enabled_tcp_monitors",
+            return_value=0,
+        ),
+    ):
+        mock_session_local.return_value.__enter__.return_value = db_session
+
+        executed_count = run_monitoring_cycle()
+
+    assert executed_count == 0
+    assert host.status == "offline"
