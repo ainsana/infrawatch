@@ -6,7 +6,9 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
 COPY pyproject.toml ./
+COPY alembic.ini ./
 COPY backend ./backend
+COPY migrations ./migrations
 
 RUN python -m pip install --no-cache-dir .
 
