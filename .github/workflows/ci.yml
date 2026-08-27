@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  quality-and-tests:
+    runs-on: ubuntu-latest
+
+    env:
+      POSTGRES_DB: infrawatch_test
+      POSTGRES_USER: infrawatch
+      POSTGRES_PASSWORD: infrawatch-ci
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: 5432
+      HOST_OFFLINE_AFTER_SECONDS: 300
+      MONITORING_INTERVAL_SECONDS: 60
+
+    services:
+      postgres:
+        image: postgres:18
+
+        env:
+          POSTGRES_DB: infrawatch_test
+          POSTGRES_USER: infrawatch
+          POSTGRES_PASSWORD: infrawatch-ci
+
+        ports:
+          - 5432:5432
+
+        options: >-
+          --health-cmd "pg_isready -U infrawatch -d infrawatch_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install dependencies
+        run: python -m pip install -e ".[dev]"
+
+      - name: Check database migrations
+        run: |
+          python -m alembic upgrade head
+          python -m alembic check
+
+      - name: Run Ruff
+        run: ruff check .
+
+      - name: Run tests
+        run: python -m pytest -v
