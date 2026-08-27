@@ -1,5 +1,7 @@
 # InfraWatch
 
+[![CI](https://github.com/ainsana/infrawatch/actions/workflows/ci.yml/badge.svg)](https://github.com/ainsana/infrawatch/actions/workflows/ci.yml)
+
 InfraWatch is a portfolio project for infrastructure monitoring, network service availability, and host health management across small Windows and Linux environments.
 
 The project is designed to demonstrate practical skills in backend development, system administration, networking, PostgreSQL, Docker, monitoring, automated testing, and infrastructure-oriented software design.
