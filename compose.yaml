@@ -21,6 +21,44 @@ services:
       retries: 5
       start_period: 10s
 
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: infrawatch-api
+
+    environment:
+      POSTGRES_DB: infrawatch
+      POSTGRES_USER: infrawatch
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+
+      HOST_OFFLINE_AFTER_SECONDS: ${HOST_OFFLINE_AFTER_SECONDS:-300}
+      MONITORING_INTERVAL_SECONDS: ${MONITORING_INTERVAL_SECONDS:-60}
+
+    ports:
+      - "127.0.0.1:8000:8000"
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).read()",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
 
 volumes:
   postgres_data:
