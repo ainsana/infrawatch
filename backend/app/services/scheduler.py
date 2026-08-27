@@ -3,7 +3,7 @@ import logging
 
 from backend.app.services.monitoring import run_monitoring_cycle
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("uvicorn.error.infrawatch.scheduler")
 
 
 async def run_monitoring_scheduler(

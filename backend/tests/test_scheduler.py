@@ -105,7 +105,7 @@ def test_monitoring_scheduler_continues_after_cycle_error(
             ) as mock_to_thread,
             caplog.at_level(
                 logging.ERROR,
-                logger="backend.app.services.scheduler",
+                logger="uvicorn.error.infrawatch.scheduler",
             ),
         ):
             with pytest.raises(asyncio.CancelledError):
